@@ -38,6 +38,7 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p zap_reports
+                    chmod 777 zap_reports
 
                     docker run --rm --network=host \
                     -v $PWD/zap_reports:/zap/wrk \
