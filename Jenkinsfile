@@ -16,25 +16,28 @@ pipeline {
 
         stage('Start API (Staging)') {
             steps {
-                // Run API in background for tests
                 sh 'nohup npm start &'
-                // Give it a few seconds to boot
                 sh 'sleep 5'
             }
         }
 
         stage('Run Integration Tests') {
             steps {
-                // Ensure newman is installed globally or as devDependency
                 sh 'npx newman run postman/collection.json -e postman/env.json'
+            }
+        }
+
+        stage('Performance Test (k6)') {
+            steps {
+                // Run k6 load test against the same API
+                sh 'k6 run k6/perf-test.js'
             }
         }
     }
 
     post {
         always {
-            // Try to kill Node app if it's still running
-            sh 'pkill -f "node app.js" || true'
+            sh 'pkill -f node app.js || true'
         }
     }
 }
