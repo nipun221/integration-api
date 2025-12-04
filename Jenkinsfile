@@ -33,11 +33,30 @@ pipeline {
                 sh 'k6 run k6/perf-test.js'
             }
         }
+
+        stage('Security Scan (OWASP ZAP)') {
+            steps {
+                sh '''
+                    mkdir -p zap_reports
+
+                    # Run OWASP ZAP baseline scan using Docker
+                    # --network=host lets the container hit localhost:3000 on the host
+                    docker run --rm --network=host \
+                      -v $PWD/zap_reports:/zap/wrk \
+                      owasp/zap2docker-stable \
+                      zap-baseline.py \
+                      -t http://localhost:3000 \
+                      -r zap_report.html || true
+                '''
+            }
+        }
+
     }
 
     post {
         always {
             sh 'pkill -f node app.js || true'
+            archiveArtifacts artifacts: 'zap_reports/zap_report.html', fingerprint: true
         }
     }
 }
