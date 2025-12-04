@@ -39,24 +39,30 @@ pipeline {
                 sh '''
                     mkdir -p zap_reports
 
-                    # Run OWASP ZAP baseline scan using Docker
-                    # --network=host lets the container hit localhost:3000 on the host
                     docker run --rm --network=host \
-                      -v $PWD/zap_reports:/zap/wrk \
-                      owasp/zap2docker-stable \
-                      zap-baseline.py \
-                      -t http://localhost:3000 \
-                      -r zap_report.html || true
+                    -v $PWD/zap_reports:/zap/wrk \
+                    zaproxy/zap-stable \
+                    zap-baseline.py \
+                    -t http://localhost:3000 \
+                    -r zap_report.html || true
                 '''
             }
         }
+
 
     }
 
     post {
         always {
-            sh 'pkill -f node app.js || true'
-            archiveArtifacts artifacts: 'zap_reports/zap_report.html', fingerprint: true
+            sh 'pkill -f "node app.js" || true'
+
+            script {
+                if (fileExists('zap_reports/zap_report.html')) {
+                    archiveArtifacts artifacts: 'zap_reports/zap_report.html', fingerprint: true
+                } else {
+                    echo 'No ZAP report generated, skipping artifact archiving'
+                }
+            }
         }
     }
 }
