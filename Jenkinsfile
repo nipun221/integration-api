@@ -42,36 +42,31 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'Dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh 'echo "$PASS" | docker login -u "$USER" --password-stdin'
-                    sh 'docker push $IMAGE:$TAG'
+                script {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh '''
+                    echo "$PASS" | docker login -u "$USER" --password-stdin
+
+                    # Retag local image into logged-in user's namespace and push
+                    docker tag nipun221/integration-api:staging ${USER}/integration-api:staging || true
+                    docker push ${USER}/integration-api:staging
+                    '''
+                }
                 }
             }
         }
 
         stage('Deploy to Staging') {
-            when {
-                branch 'main'
-            }
             steps {
-                sshagent(credentials: ['azurevm']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no azureuser@20.2.137.224 '
-                            mkdir -p ~/app &&
-                            cd ~/app &&
-                            pkill -f node || true &&
-                            rm -rf * &&
-                            echo "Copy complete"
-                        '
-                        
-                        scp -o StrictHostKeyChecking=no -r * azureuser@20.2.137.224:~/app
-                        
-                        ssh -o StrictHostKeyChecking=no azureuser@20.2.137.224 '
-                            cd ~/app &&
-                            npm install &&
-                            nohup npm start &
-                        '
-                    """
+                sshagent(['azurevm']) {
+                sh """
+                    ssh -o StrictHostKeyChecking=no azureuser@20.2.137.224 '
+                    docker pull ${USER}/integration-api:staging &&
+                    docker stop api || true &&
+                    docker rm api || true &&
+                    docker run -d --name api -p 3000:3000 ${USER}/integration-api:staging
+                    '
+                """
                 }
             }
         }
