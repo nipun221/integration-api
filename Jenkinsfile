@@ -48,7 +48,7 @@ pipeline {
                     echo "$PASS" | docker login -u "$USER" --password-stdin
 
                     # Retag local image into logged-in user's namespace and push
-                    docker tag nipun221/integration-api:staging ${USER}/integration-api:staging || true
+                    docker tag nipun2221/integration-api:staging ${USER}/integration-api:staging || true
                     docker push ${USER}/integration-api:staging
                     '''
                 }
