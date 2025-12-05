@@ -61,10 +61,10 @@ pipeline {
                 sshagent(['azurevm']) {
                 sh """
                     ssh -o StrictHostKeyChecking=no azureuser@20.2.137.224 '
-                    docker pull ${USER}/integration-api:staging &&
+                    docker pull nipun2221/integration-api:staging &&
                     docker stop api || true &&
                     docker rm api || true &&
-                    docker run -d --name api -p 3000:3000 ${USER}/integration-api:staging
+                    docker run -d --name api -p 3000:3000 nipun2221/integration-api:staging
                     '
                 """
                 }
