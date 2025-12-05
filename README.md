@@ -1,111 +1,218 @@
-# 🧪 Integration API – CI Pipeline with Postman, k6 & OWASP ZAP
+# 🧪 Integration API – CI/CD Pipeline with Postman, k6, OWASP ZAP & Docker Deployment
 
-This project showcases a **complete DevOps testing workflow** for a simple Node.js REST API.
-It includes **integration testing**, **performance testing**, and **security scanning**, all automated through a Jenkins CI pipeline running on an Azure Ubuntu VM.
+This project showcases a **complete DevOps testing and deployment workflow** for a simple Node.js REST API.
+It includes **integration testing**, **performance testing**, **security scanning**, **Docker image packaging**, and **automated deployment to a staging VM**, all executed through a Jenkins pipeline running on Azure.
 
 ---
 
-## 🚀 What This Project Demonstrates
+# 🚀 What This Project Demonstrates
 
 ### ✅ Integration Testing (Postman + Newman)
 
-* API endpoints tested automatically with Newman
-* End-to-end flow validated in Jenkins
-* Build fails if any assertion fails
+* Automated API endpoint validation
+* End-to-end flow testing
+* Build fails automatically if any test fails
 
 ### ⚡ Performance Testing (k6)
 
-* Load tests simulate real-world traffic
-* Response times, error rates, and thresholds evaluated
-* Performance results printed directly in the Jenkins console
+* Simulates real-world concurrent traffic
+* Evaluates latency, throughput, and error thresholds
+* k6 results fully printed in Jenkins logs
 
 ### 🔐 Security Testing (OWASP ZAP)
 
-* Baseline security scan against the running API
-* Detects missing security headers, CSP issues, information leaks
-* HTML reports archived as Jenkins artifacts
+* Automated baseline scan against the live API
+* Detects missing headers, CSP issues, leaks, and weak configurations
+* HTML report archived in Jenkins
+
+### 🚢 Continuous Deployment (Docker + SSH to Azure VM)
+
+* Build Docker image
+* Push to Docker Hub
+* SSH into staging VM
+* Deploy latest container automatically
+* Verify service availability on staging
 
 ---
 
-## 🔧 Tech Stack
+# 🔧 Tech Stack
 
-* Node.js + Express
-* SQLite (lightweight DB)
-* Postman + Newman (Integration Tests)
-* **k6** (Performance Tests)
-* **OWASP ZAP** (Security Scan)
-* Jenkins on Azure VM
-* GitHub Webhooks (CI Trigger)
-
----
-
-## ⚙️ Jenkins Pipeline Workflow
-
-1. Webhook triggers Jenkins on every GitHub push
-2. Jenkins pulls the latest code
-3. Installs dependencies (`npm install`)
-4. Starts the API (`npm start`)
-5. Runs **Postman/Newman integration tests**
-6. Runs **k6 performance tests**
-7. Runs **OWASP ZAP baseline security scan**
-8. Archives reports and stops the API
-
-All three test stages must pass for the pipeline to succeed.
+| Component           | Tool              |
+| ------------------- | ----------------- |
+| Application         | Node.js + Express |
+| Database            | SQLite            |
+| Integration Tests   | Postman + Newman  |
+| Performance Tests   | k6                |
+| Security Scan       | OWASP ZAP         |
+| CI/CD Orchestration | Jenkins           |
+| Containerization    | Docker            |
+| Deployment          | Azure VM (Linux)  |
+| CI Trigger          | GitHub Webhooks   |
 
 ---
 
-## 🧪 Integration Tests (Postman)
+# ⚙️ Jenkins Pipeline Workflow
 
-The Postman collection verifies:
+### **1️⃣ Trigger**
 
-* `GET /health` → API is live
-* `POST /items` → Item is created with `id`, `name`, `price`
-* `GET /items` → Returns an array with at least one item
-* `GET /items/:id` → Returns the correct item created earlier
+* GitHub webhook triggers Jenkins on each push
 
-These tests ensure the API behaves correctly across dependent operations.
+### **2️⃣ Build Phase**
+
+* Clone repository
+* Install Node dependencies
+* Run ESLint (optional)
+
+### **3️⃣ Testing Phase**
+
+#### 🔹 **Integration Tests (Newman)**
+
+* API started locally inside Jenkins agent
+* Postman tests executed
+* API stopped after tests
+
+#### 🔹 **Performance Tests (k6)**
+
+* k6 script runs against `http://localhost:3000`
+* Thresholds determine success/failure
+
+#### 🔹 **Security Scan (OWASP ZAP)**
+
+* `zap-baseline.py` scans live API
+* Reports saved into `zap_reports/` and archived
+
+### **4️⃣ Docker Packaging**
+
+* Build Docker image
+* Tag & push to DockerHub
+
+### **5️⃣ Deployment Phase**
+
+Executed using Jenkins SSH credential (`azurevm`):
+
+1. SSH into staging VM
+2. Pull latest image
+3. Stop and remove old container
+4. Run container with port mapping
+5. Ensure container restarts on system reboot
+
+### **6️⃣ Verification**
+
+Jenkins checks:
+
+```
+curl http://<staging-ip>:3000/health
+```
+
+If the API responds with `200 OK`, deployment marked successful.
 
 ---
 
-## ⚡ Performance Tests (k6)
+# 🧪 Integration Testing (Postman)
 
-The `k6/perf-test.js` script:
+Endpoints validated:
 
-* Sends concurrent requests to the API
-* Measures latency, throughput, and failure rate
-* Enforces thresholds (e.g., `p95 < 500ms`, error rate < 1%)
+| Endpoint         | Purpose             |
+| ---------------- | ------------------- |
+| `GET /health`    | API availability    |
+| `POST /items`    | Create new item     |
+| `GET /items`     | Fetch all items     |
+| `GET /items/:id` | Fetch specific item |
 
-Performance results are fully visible in Jenkins logs.
+Assertions check:
+
+* Status codes
+* Response structure
+* Field types
+* Consistency across requests
 
 ---
 
-## 🔐 Security Scan (OWASP ZAP)
+# ⚡ Performance Tests (k6)
 
-The pipeline runs:
+The script (`k6/perf-test.js`) runs:
+
+* 50 virtual users
+* 30s duration
+* Threshold checks like:
+
+  ```
+  http_req_failed < 1%
+  http_req_duration p(95) < 500ms
+  ```
+
+Results include:
+
+* Avg / min / max latency
+* RPS
+* Error rate
+
+All visible in Jenkins console output.
+
+---
+
+# 🔐 Security Scan (OWASP ZAP)
+
+Command executed:
 
 ```bash
 zaproxy/zap-stable zap-baseline.py -t http://localhost:3000 -r zap_report.html
 ```
 
-OWASP ZAP identifies:
+Findings include:
 
-* Missing security headers
-* CSP directive issues
-* Cache-control problems
-* X-Powered-By leakage
-* Other common vulnerabilities
+* Missing `X-Frame-Options`
+* Missing `Permissions-Policy`
+* Missing `CSP`
+* Information leakage (X-Powered-By header)
+* Cache-control issues
 
-The HTML report appears as a Jenkins artifact under `zap_reports/`.
+HTML report archived at:
+
+```
+zap_reports/zap_report.html
+```
 
 ---
 
-## ✔️ Achievements
+# 🚀 Continuous Deployment (CD)
 
-* Fully automated CI pipeline with **integration**, **performance**, and **security** testing
-* All testing stages run inside Jenkins on every commit
-* GitHub → Jenkins webhook works seamlessly
-* OWASP ZAP reports generated successfully
-* k6 load testing integrated into the workflow
-* API tested end-to-end in a real CI environment
+After tests pass:
 
+1. Docker image is built
+2. Pushed to Docker Hub (`nipun2221/integration-api:staging`)
+3. Jenkins SSHes into staging VM
+4. Runs:
+
+```bash
+docker pull nipun2221/integration-api:staging
+docker stop api || true
+docker rm api || true
+docker run -d --name api -p 3000:3000 --restart unless-stopped nipun2221/integration-api:staging
+```
+
+5. Jenkins verifies with `curl`
+6. Application becomes available at:
+
+```
+http://<staging-ip>:3000/health
+```
+
+---
+
+# ✔️ Achievements
+
+### 🎯 Full CI + CD Pipeline Working
+
+* ✔️ GitHub → Jenkins webhook
+* ✔️ Integration tests automated
+* ✔️ k6 performance tests integrated
+* ✔️ OWASP ZAP security scan automated
+* ✔️ Docker image built & pushed
+* ✔️ Automatic deployment to staging VM
+* ✔️ Live API verified after deployment
+
+This setup represents a complete **DevOps testing + deployment lifecycle**, suitable for real-world CI/CD environments.
+
+---
 
