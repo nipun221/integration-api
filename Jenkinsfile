@@ -1,6 +1,13 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE = "nipun221/integration-api"
+        TAG = "staging"
+        STAGING_HOST = "20.2.90.173"   
+        STAGING_USER = "azureuser"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -14,7 +21,7 @@ pipeline {
             }
         }
 
-        stage('Start API (Staging)') {
+        stage('Start API for tests') {
             steps {
                 sh 'nohup npm start &'
                 sh 'sleep 5'
@@ -27,43 +34,59 @@ pipeline {
             }
         }
 
-        stage('Performance Test (k6)') {
+        stage('Build Docker Image') {
             steps {
-                // Run k6 load test against the same API
-                sh 'k6 run k6/perf-test.js'
+                sh 'docker build -t $IMAGE:$TAG .'
             }
         }
 
-        stage('Security Scan (OWASP ZAP)') {
+        stage('Push Docker Image') {
             steps {
-                sh '''
-                    mkdir -p zap_reports
-                    chmod 777 zap_reports
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh 'echo "$PASS" | docker login -u "$USER" --password-stdin'
+                    sh 'docker push $IMAGE:$TAG'
+                }
+            }
+        }
 
-                    docker run --rm --network=host \
-                    -v $PWD/zap_reports:/zap/wrk \
-                    zaproxy/zap-stable \
-                    zap-baseline.py \
-                    -t http://localhost:3000 \
-                    -r zap_report.html || true
-                '''
+        stage('Deploy to Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sshagent(credentials: ['azurevm']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no azureuser@20.2.137.224 '
+                            mkdir -p ~/app &&
+                            cd ~/app &&
+                            pkill -f node || true &&
+                            rm -rf * &&
+                            echo "Copy complete"
+                        '
+                        
+                        scp -o StrictHostKeyChecking=no -r * azureuser@20.2.137.224:~/app
+                        
+                        ssh -o StrictHostKeyChecking=no azureuser@20.2.137.224 '
+                            cd ~/app &&
+                            npm install &&
+                            nohup npm start &
+                        '
+                    """
+                }
             }
         }
 
 
+        stage('Verify Deployment') {
+            steps {
+                sh "curl -I http://$STAGING_HOST:3000/health"
+            }
+        }
     }
 
     post {
         always {
-            sh 'pkill -f "node app.js" || true'
-
-            script {
-                if (fileExists('zap_reports/zap_report.html')) {
-                    archiveArtifacts artifacts: 'zap_reports/zap_report.html', fingerprint: true
-                } else {
-                    echo 'No ZAP report generated, skipping artifact archiving'
-                }
-            }
+            sh 'pkill -f node || true'
         }
     }
 }
