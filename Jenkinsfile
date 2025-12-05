@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE = "nipun2221/integration-api"
         TAG = "staging"
-        STAGING_HOST = "20.2.90.173"   
+        STAGING_HOST = "20.2.137.224"   
         STAGING_USER = "azureuser"
     }
 
